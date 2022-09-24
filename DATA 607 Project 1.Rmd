@@ -1,0 +1,68 @@
+```{r}
+library(stringr)
+library(dplyr)
+library(readr)
+library(tidyr)
+library(knitr)
+og = readLines('P1.txt')
+og = str_replace_all(og,"-","") 
+print(og[1:11])
+```
+
+```{r}
+clean = read.delim(textConnection(og),header = FALSE, sep = "|", stringsAsFactors = FALSE)
+
+clean = clean[,-11]
+
+cln = paste(trimws(as.character(clean[1,])), trimws(as.character(clean[2,])))
+
+cln = make.names(str_sub(cln, 1,11))
+
+clean = as_tibble(clean[-1:-2,])
+names(clean) = cln
+
+player = seq(1,nrow(clean),2)
+sd = seq(2,nrow(clean),2)
+
+players = clean[player,]
+s_r = select(clean[sd,], State = Pair.Num, Pre.Rating = Player.Name)
+
+players = bind_cols(players, s_r)
+
+kable(players[1:5,])
+```
+```{r}
+players = players %>% 
+  mutate(Pre.Rating = str_replace(Pre.Rating,"\\d+\\s+/ R:\\s+","")) %>% 
+  mutate(Pre.Rating = str_replace(Pre.Rating,"^[P].+|>.+","")) %>% 
+  mutate(Pre.Rating = as.integer(str_extract(Pre.Rating, "\\d+"))) 
+  
+players = players %>% 
+  mutate(Total.Pts = as.numeric(Total.Pts),
+         Pair.Num = parse_number(Pair.Num),
+         Player.Name = trimws(Player.Name))
+
+players = players %>%
+  gather("Round","OppPairNum", 4:10) %>% 
+  mutate(OppPairNum = parse_number(OppPairNum)) 
+
+Ratings = select(players, Pair.Num,OppPreRating = Pre.Rating) %>% distinct()
+
+players = left_join(players, Ratings, by = c("OppPairNum" = "Pair.Num"))
+
+kable(players[1:8,] )
+```
+
+```{r}
+players = players %>% 
+  group_by(Player.Name) %>% 
+  mutate(AvgOppPreRating = round(mean(OppPreRating, na.rm=T)))
+
+results = players %>% 
+  select(Player.Name, Player.State = State, Total.Pts, Pre.Rating, AvgOppPreRating) %>% 
+  ungroup() %>% 
+  distinct()
+
+write_csv(results, "P1.output.csv")
+kable(head(results))
+```
